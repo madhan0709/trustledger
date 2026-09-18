@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.routers import auth, applications, documents
+from app.routers import auth, applications, documents, document_analysis
 
 app = FastAPI(title="TrustLedger API")
 
@@ -20,6 +20,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(applications.router)
 app.include_router(documents.router)
+app.include_router(document_analysis.router)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

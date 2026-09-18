@@ -148,3 +148,70 @@ Uploads a document file for a specific loan application.
 | 422  | Invalid document_type or MIME type, empty file |
 | 500  | Storage or database error           |
 
+---
+
+## Document Forensics API
+
+### `POST /api/documents/{document_id}/analyze`
+
+Triggers forensic analysis for an existing document. Downloads the original file from secure storage, verifies the SHA-256 hash, runs the 4-component AI forensic pipeline (Metadata, Structural, Visual, OCR), and saves the result to the `document_analysis` PostgreSQL table.
+
+* **Auth Requirement**: Underwriter or Admin (`Authorization: Bearer <token>`)
+
+**Validation Rules:**
+- Authenticates the user and verifies access via backend dependencies
+- Validates that `document_id` exists and is a valid UUID
+- Prevents redundant multi-inserts in `document_analysis` via UPSERT
+
+**Scoring Behavior:**
+- 4 Component Scores (0 = no risk, 100 = max risk): `metadata`, `visual`, `ocr`, `structure`.
+- Aggregate Score weighting (out of 100): `metadata=20%`, `visual=25%`, `ocr=20%`, `structure=35%`
+- Output Risk Level mappings:
+  - 0–24: `low`
+  - 25–49: `medium`
+  - 50–74: `high`
+  - 75–100: `critical`
+
+**Findings Structure:**
+- The JSON response payload `findings` field contains a summary paragraph and a `signals` array. 
+- Each signal contains `category`, `severity`, `title`, `description`, and `evidence`.
+
+**Response** (201 Created):
+```json
+{
+  "id": "analysis-uuid",
+  "document_id": "document-uuid",
+  "metadata_score": 15.00,
+  "visual_score": 10.00,
+  "ocr_score": 0.00,
+  "structure_score": 25.00,
+  "overall_risk_score": 14.25,
+  "risk_level": "low",
+  "findings": {
+    "summary": "Document forensics completed. Overall risk: low.",
+    "hash_verified": true,
+    "signals": [
+      {
+        "category": "metadata",
+        "severity": "info",
+        "title": "PDF producer present",
+        "description": "Producer field present.",
+        "evidence": {"producer": "Example PDF Generator"}
+      }
+    ],
+    "limitations": []
+  },
+  "analyzed_at": "2026-09-18T18:00:00Z"
+}
+```
+
+**Error Responses:**
+
+| Code | Reason                              |
+|------|-------------------------------------|
+| 401  | Missing or invalid Bearer token     |
+| 403  | Role not permitted (not underwriter/admin) |
+| 404  | Document not found / Application not found |
+| 422  | Invalid document UUID parameter     |
+| 500  | Storage download, hashing, DB Upsert, or API analysis crash |
+
